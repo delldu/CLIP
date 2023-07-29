@@ -12,6 +12,7 @@ from tqdm import tqdm
 
 from .model import build_model
 from .simple_tokenizer import SimpleTokenizer as _Tokenizer
+import pdb
 
 try:
     from torchvision.transforms import InterpolationMode
@@ -116,6 +117,11 @@ def load(name: str, device: Union[str, torch.device] = "cuda" if torch.cuda.is_a
     preprocess : Callable[[PIL.Image], torch.Tensor]
         A torchvision transform that converts a PIL image into a tensor that the returned model can take as its input
     """
+    # name = 'ViT-B/32'
+    # device = 'cuda'
+    # jit = False
+    # download_root = None
+
     if name in _MODELS:
         model_path = _download(_MODELS[name], download_root or os.path.expanduser("~/.cache/clip"))
     elif os.path.isfile(name):
@@ -134,6 +140,8 @@ def load(name: str, device: Union[str, torch.device] = "cuda" if torch.cuda.is_a
                 warnings.warn(f"File {model_path} is not a JIT archive. Loading as a state dict instead")
                 jit = False
             state_dict = torch.load(opened_file, map_location="cpu")
+
+    # model_path -- '/home/dell/.cache/clip/ViT-B-32.pt'
 
     if not jit:
         model = build_model(state_dict or model.state_dict()).to(device)
@@ -222,6 +230,10 @@ def tokenize(texts: Union[str, List[str]], context_length: int = 77, truncate: b
     A two-dimensional tensor containing the resulting tokens, shape = [number of input strings, context_length].
     We return LongTensor when torch version is <1.8.0, since older index_select requires indices to be long.
     """
+    # texts = ['a diagram', 'a dog', 'a cat']
+    # context_length = 77
+    # truncate = False
+
     if isinstance(texts, str):
         texts = [texts]
 
@@ -233,6 +245,12 @@ def tokenize(texts: Union[str, List[str]], context_length: int = 77, truncate: b
     else:
         result = torch.zeros(len(all_tokens), context_length, dtype=torch.int)
 
+    # (Pdb) sot_token -- 49406, eot_token -- 49407
+
+    # (Pdb) all_tokens[0] -- [49406, 320, 22697, 49407]
+    # (Pdb) all_tokens[1] -- [49406, 320, 1929, 49407]
+    # (Pdb) all_tokens[2] -- [49406, 320, 2368, 49407]
+
     for i, tokens in enumerate(all_tokens):
         if len(tokens) > context_length:
             if truncate:
@@ -242,4 +260,5 @@ def tokenize(texts: Union[str, List[str]], context_length: int = 77, truncate: b
                 raise RuntimeError(f"Input {texts[i]} is too long for context length {context_length}")
         result[i, :len(tokens)] = torch.tensor(tokens)
 
+    # result.size() -- [3, 77], !!! context_length -- 77 !!!
     return result

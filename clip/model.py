@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-
+import pdb
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -153,14 +153,13 @@ class ModifiedResNet(nn.Module):
 
         return x
 
-
-class LayerNorm(nn.LayerNorm):
-    """Subclass torch's LayerNorm to handle fp16."""
-
-    def forward(self, x: torch.Tensor):
-        orig_type = x.dtype
-        ret = super().forward(x.type(torch.float32))
-        return ret.type(orig_type)
+# support torch.jit.script
+# class LayerNorm(nn.LayerNorm):
+#     """Subclass torch's LayerNorm to handle fp16."""
+#     def forward(self, x: torch.Tensor):
+#         orig_type = x.dtype
+#         ret = super().forward(x.type(torch.float32))
+#         return ret.type(orig_type)
 
 
 class QuickGELU(nn.Module):
@@ -173,13 +172,13 @@ class ResidualAttentionBlock(nn.Module):
         super().__init__()
 
         self.attn = nn.MultiheadAttention(d_model, n_head)
-        self.ln_1 = LayerNorm(d_model)
+        self.ln_1 = nn.LayerNorm(d_model) # LayerNorm(d_model), support torch.jit.script
         self.mlp = nn.Sequential(OrderedDict([
             ("c_fc", nn.Linear(d_model, d_model * 4)),
             ("gelu", QuickGELU()),
             ("c_proj", nn.Linear(d_model * 4, d_model))
         ]))
-        self.ln_2 = LayerNorm(d_model)
+        self.ln_2 = nn.LayerNorm(d_model) # LayerNorm(d_model), support torch.jit.script
         self.attn_mask = attn_mask
 
     def attention(self, x: torch.Tensor):
@@ -187,8 +186,8 @@ class ResidualAttentionBlock(nn.Module):
         return self.attn(x, x, x, need_weights=False, attn_mask=self.attn_mask)[0]
 
     def forward(self, x: torch.Tensor):
-        x = x + self.attention(self.ln_1(x))
-        x = x + self.mlp(self.ln_2(x))
+        x = x + self.attention(self.ln_1(x.to(torch.float32)).to(x.dtype)) # support torch.jit.script
+        x = x + self.mlp(self.ln_2(x.to(torch.float32)).to(x.dtype)) # support torch.jit.script
         return x
 
 
@@ -213,11 +212,11 @@ class VisionTransformer(nn.Module):
         scale = width ** -0.5
         self.class_embedding = nn.Parameter(scale * torch.randn(width))
         self.positional_embedding = nn.Parameter(scale * torch.randn((input_resolution // patch_size) ** 2 + 1, width))
-        self.ln_pre = LayerNorm(width)
+        self.ln_pre = nn.LayerNorm(width) # LayerNorm(width), support torch.jit.script
 
         self.transformer = Transformer(width, layers, heads)
 
-        self.ln_post = LayerNorm(width)
+        self.ln_post = nn.LayerNorm(width) # LayerNorm(width), support torch.jit.script 
         self.proj = nn.Parameter(scale * torch.randn(width, output_dim))
 
     def forward(self, x: torch.Tensor):
@@ -226,13 +225,13 @@ class VisionTransformer(nn.Module):
         x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
         x = torch.cat([self.class_embedding.to(x.dtype) + torch.zeros(x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device), x], dim=1)  # shape = [*, grid ** 2 + 1, width]
         x = x + self.positional_embedding.to(x.dtype)
-        x = self.ln_pre(x)
+        x = self.ln_pre(x.to(torch.float32)).to(x.dtype) # support torch.jit.script
 
         x = x.permute(1, 0, 2)  # NLD -> LND
         x = self.transformer(x)
         x = x.permute(1, 0, 2)  # LND -> NLD
 
-        x = self.ln_post(x[:, 0, :])
+        x = self.ln_post(x[:, 0, :].to(torch.float32)).to(x.dtype) # support torch.jit.script
 
         if self.proj is not None:
             x = x @ self.proj
@@ -256,10 +255,22 @@ class CLIP(nn.Module):
                  transformer_layers: int
                  ):
         super().__init__()
+        # embed_dim = 512
+
+        # image_resolution = 224
+        # vision_layers = 12
+        # vision_width = 768
+        # vision_patch_size = 32
+
+        # context_length = 77
+        # vocab_size = 49408
+        # transformer_width = 512
+        # transformer_heads = 8
+        # transformer_layers = 12
 
         self.context_length = context_length
 
-        if isinstance(vision_layers, (tuple, list)):
+        if isinstance(vision_layers, (tuple, list)): # False
             vision_heads = vision_width * 32 // 64
             self.visual = ModifiedResNet(
                 layers=vision_layers,
@@ -286,14 +297,14 @@ class CLIP(nn.Module):
             attn_mask=self.build_attention_mask()
         )
 
-        self.vocab_size = vocab_size
-        self.token_embedding = nn.Embedding(vocab_size, transformer_width)
-        self.positional_embedding = nn.Parameter(torch.empty(self.context_length, transformer_width))
-        self.ln_final = LayerNorm(transformer_width)
+        self.vocab_size = vocab_size # 49408
+        self.token_embedding = nn.Embedding(vocab_size, transformer_width) # Embedding(49408, 512)
+        self.positional_embedding = nn.Parameter(torch.empty(self.context_length, transformer_width)) # [77, 512]
+        self.ln_final = nn.LayerNorm(transformer_width) # LayerNorm(transformer_width), support torch.jit.script
 
-        self.text_projection = nn.Parameter(torch.empty(transformer_width, embed_dim))
-        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
-
+        self.text_projection = nn.Parameter(torch.empty(transformer_width, embed_dim)) # [512, 512]
+        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07)) # 14.285714285714285 --> 2.6593 for requires_grad=True
+        # self.logit_scale.exp() -- 14.2857
         self.initialize_parameters()
 
     def initialize_parameters(self):
@@ -347,7 +358,7 @@ class CLIP(nn.Module):
         x = x.permute(1, 0, 2)  # NLD -> LND
         x = self.transformer(x)
         x = x.permute(1, 0, 2)  # LND -> NLD
-        x = self.ln_final(x).type(self.dtype)
+        x = self.ln_final(x.to(torch.float32)).type(self.dtype) # support torch.jit.script
 
         # x.shape = [batch_size, n_ctx, transformer.width]
         # take features from the eot embedding (eot_token is the highest number in each sequence)
@@ -359,9 +370,9 @@ class CLIP(nn.Module):
         image_features = self.encode_image(image)
         text_features = self.encode_text(text)
 
-        # normalized features
-        image_features = image_features / image_features.norm(dim=1, keepdim=True)
-        text_features = text_features / text_features.norm(dim=1, keepdim=True)
+        # normalized features, support torch.jit.script
+        image_features = image_features / image_features.norm(p=2.0, dim=1, keepdim=True)
+        text_features = text_features / text_features.norm(p=2.0, dim=1, keepdim=True)
 
         # cosine similarity as logits
         logit_scale = self.logit_scale.exp()
@@ -399,7 +410,7 @@ def convert_weights(model: nn.Module):
 def build_model(state_dict: dict):
     vit = "visual.proj" in state_dict
 
-    if vit:
+    if vit: # True
         vision_width = state_dict["visual.conv1.weight"].shape[0]
         vision_layers = len([k for k in state_dict.keys() if k.startswith("visual.") and k.endswith(".attn.in_proj_weight")])
         vision_patch_size = state_dict["visual.conv1.weight"].shape[-1]
