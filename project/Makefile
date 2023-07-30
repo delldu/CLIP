@@ -35,7 +35,7 @@ OBJECT := $(addsuffix .o,$(basename ${SOURCE}))
 #****************************************************************************
 all: ${TARGET}
 
-${TARGET}: ${OBJECT}
+${TARGET}: ${OBJECT} codec.h clip_text.h
 	${CXX} ${LDFLAGS} -o ${TARGET} ${OBJECT} ${LIBS}
 
 install:

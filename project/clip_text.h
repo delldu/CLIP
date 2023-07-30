@@ -20,6 +20,8 @@
 
 struct CLIPText {
 public:
+    CLIPText() {};
+    
     std::vector<uint32_t> encode(const std::string& text);
     std::string decode(const std::vector<uint32_t>& tokens);
     std::string bpe(const std::string& token_word);
@@ -48,6 +50,11 @@ private:
 
 static std::vector<std::string> get_clip_words(std::string str)
 {
+    // const Regex kCLIPRegex(
+    //     "(?i)(<\\|startoftext\\|>|<\\|endoftext\\|>|\\'s|\\'t|\\'re|\\'ve|"
+    //     "\\'m|\\'ll|\\'d|[\\pL]+|[\\pN]|[^\\s\\pL\\pN]+)");
+
+
     const std::regex kCLIPRegex(
         R"(<|startoftext|>|<|endoftext|>|'s|'t|'re|'ve|'m|'ll|'d|[[:alpha:]]+|[[:digit:]]+|[^s[:alpha:]]+[:digit:]]+)");
     // const std::regex kWord(R"(</w>|</W>)");
@@ -143,9 +150,10 @@ std::vector<uint32_t> CLIPText::encode(const std::string& text)
 
     for (std::string word: words) {
         // std::cout << word << std::endl;
-        std::string token_word;
-        for (size_t i = 0; i < word.size(); i++)
-            token_word.push_back(clip_text_byte_encoder[(uint32_t)word.at(i)]);
+        std::string token_word = "";
+        for (size_t i = 0; i < word.size(); i++) {
+            token_word += clip_text_byte_encoder[(uint32_t)word[i]];
+        }
 
         std::string bpe_word = bpe(token_word);
         bpe_tokens.push_back(clip_text_word_encoder[bpe_word]);
@@ -215,7 +223,7 @@ std::string CLIPText::bpe(const std::string& token_word)
     }
 
     bpe_word = token_list.at(0);
-    m_cache.insert(token_word, bpe_word);
+    m_cache[token_word] = bpe_word;
 
 	return bpe_word;	
 }
@@ -227,6 +235,7 @@ std::string CLIPText::bpe(const std::string& token_word)
 std::string CLIPText::decode(const std::vector<uint32_t>& tokens)
 {
     const std::regex kWord(R"(</w>|</W>)");
+    std::string s;
 
 	std::string text="";
 
@@ -236,7 +245,8 @@ std::string CLIPText::decode(const std::vector<uint32_t>& tokens)
     }
 
     for (size_t i = 0; i < bpe_text.size(); i++) {
-        text += clip_text_byte_encoder[(uint32_t)bpe_text.at(i)];
+        s = bpe_text.at(i);
+        text += clip_text_byte_decoder[s];
     }
 
     text = std::regex_replace(text, kWord, " "); // remove '</w>'
