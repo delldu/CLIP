@@ -6,73 +6,59 @@
 ***
 ************************************************************************************/
 
-#include <algorithm>
-#include <fstream>
 #include <iostream>
-#include <iterator>
-#include <regex>
-#include <unordered_set>
-#include <codecvt>
-#include <unordered_map>
+#include <cstring>
 
-#define CLIP_TEXT_IMPLEMENTATION
 #include "clip_text.h"
 
-// std::vector<uint32_t> clip_text_encode(std::string str)
+// head -n 48896 bpe_simple_vocab_16e6.txt | grep -v "bpe_simple_vocab_16e6" > /tmp/bpe_vocab.txt
+// xxd -i /tmp/bpe_vocab.txt bpe_vocab.h
+// unsigned char _tmp_bpe_vocab_txt, _tmp_bpe_vocab_txt_len=524605
+
+// #define BPE_VOCAB_SIZE 48895
+
+// #include "bpe_vocab.h"
+
+// void test()
 // {
-// 	std::vector<uint32_t> tokens;
 
-// 	std::cout << "Encoding 1:" << str << " ..." << std::endl;
-// 	// str.erase(remove(str.begin(), str.end(), ' '), str.end());
-// 	// str = regex_replace(str, std::regex("\\s"),"");
-// 	// remove_if(str.begin(), str.end(), isspace);
+// 	uint32_t n = 0;
+// 	char *v[BPE_VOCAB_SIZE], *s, *p;
 
-// 	transform(str.begin(),str.end(), str.begin(),::tolower);
-// 	std::cout << "Encoding 2:" << str << " ..." << std::endl;
-
-
-// 	tokens.push_back(320);
-// 	tokens.push_back(1024);
-
-// 	std::cout << "Encoding Results:" << std::endl;
-// 	for (auto &t: tokens) {
-// 		std::cout << t << std::endl;
+// 	v[n++] = s = p = (char *) _tmp_bpe_vocab_txt;
+// 	for (; *p && n < BPE_VOCAB_SIZE; ++p) {
+// 		if (*p == '\n') {
+// 			*p = '\0';
+// 			v[n++] = s;
+// 			s = p + 1;
+// 		}
 // 	}
+// 	for (uint32_t i = 0; i < BPE_VOCAB_SIZE; i++) {
+// 		p = strchr(v[i], ' ');
+// 		if (p)
+// 			*p = '\0';
 
-
-// 	return tokens;
-// }
-
-// std::string clip_text_decode(std::vector<uint32_t> tokens)
-// {
-// 	std::string text("This is decode");
-
-// 	std::cout << "Decoding ... " << std::endl;
-// 	for (auto &t: tokens) {
-// 		std::cout << t << std::endl;
+// 		std::cout << i << ": " << v[i] << std::endl;
 // 	}
-
-// 	std::cout << "Decoding Results:" << std::endl;
-// 	std::cout << text << std::endl;
-
-// 	return text;
 // }
 
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
-	std::cout << "Hello world !" << std::endl;
+	std::string text = "a diagram, hello world, good, man, women !";
+    CLIPText* codec = new CLIPText();
 
-	CLIPText *codec = new CLIPText();
+    std::vector<uint32_t> tokens = codec->encode(text);
+    std::cout << "Encode: " << text << std::endl;
+    for (auto& t : tokens)
+        std::cout << t << " ";
+    std::cout << std::endl;
 
-	std::vector<uint32_t> tokens = codec->encode("a diagram");
-	for (auto &t: tokens) {
-		std::cout << "Encode: " << t << std::endl;
-	}
+    std::cout << "Decode: " << std::endl;
+    std::string words = codec->decode(tokens);
+    std::cout << words << std::endl;
 
-	std::string words = codec->decode(tokens);
-	std::cout << "Decode: " << words << std::endl;
+	// test();
 
-	return 0;
+    return 0;
 }
-
