@@ -107,6 +107,7 @@ class SimpleTokenizer(object):
         # (Pdb) merges[-1] -- ''
 
         merges = merges[1:49152-256-2+1] # 49152-256-2+1 --> 48895
+
         # (Pdb) len(merges) -- 48894
         # (Pdb) merges[0] -- 'i n'
         # (Pdb) merges[-1] -- 'jeky ll</w>'

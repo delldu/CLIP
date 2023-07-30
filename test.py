@@ -3,6 +3,10 @@ import clip
 from PIL import Image
 import pdb
 
+# from clip.simple_tokenizer import SimpleTokenizer
+# model.byte_encoder
+
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # model, preprocess = clip.load("ViT-B/32", device=device)
@@ -10,6 +14,7 @@ model, preprocess = clip.load("./download/ViT-B-32.pt", device=device)
 
 model = model.eval()
 # model -- CLIP(...)
+
 
 # model = torch.jit.script(model)
 # model = torch.compile(model)
