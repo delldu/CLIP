@@ -20,8 +20,7 @@
 
 struct CLIPText {
 public:
-    CLIPText() {};
-    
+    CLIPText();
     std::vector<uint32_t> encode(const std::string& text);
     std::string decode(const std::vector<uint32_t>& tokens);
     std::string bpe(const std::string& token_word);
@@ -31,6 +30,8 @@ private:
 		{"<|startoftext|>", "<|startoftext|>"},
 		{"<|endoftext|>", "<|endoftext|>"}
 	};
+    std::map<uint32_t, std::string> m_clip_text_word_decoder;
+    std::map<std::string, uint32_t> m_clip_text_byte_decoder;
 };
 #endif // CLIP_TEXT_H
 
@@ -141,6 +142,21 @@ static std::string find_best_bpe_pair(std::vector<std::string> pairs)
 }
 
 
+CLIPText::CLIPText() {
+#ifdef CLIP_TEXT_FAST
+    std::cout << "CLIPText Fast Version" << std::endl;
+#else    
+    std::cout << "CLIPText Slow Version" << std::endl;
+    for (auto& x:clip_text_byte_encoder) {
+        m_clip_text_byte_decoder[x.second] = x.first;
+    }
+
+    for (auto& x:clip_text_word_encoder) {
+        m_clip_text_word_decoder[x.second] = x.first;
+    }
+#endif    
+};
+
 
 std::vector<uint32_t> CLIPText::encode(const std::string& text)
 {
@@ -241,12 +257,20 @@ std::string CLIPText::decode(const std::vector<uint32_t>& tokens)
 
     std::string bpe_text="";
     for (size_t i = 0; i < tokens.size(); i++) {
+#ifdef CLIP_TEXT_FAST
         bpe_text += clip_text_word_decoder[(uint32_t)i];
+#else
+        bpe_text += m_clip_text_word_decoder[(uint32_t)i];
+#endif        
     }
 
     for (size_t i = 0; i < bpe_text.size(); i++) {
         s = bpe_text.at(i);
+#ifdef CLIP_TEXT_FAST
         text += clip_text_byte_decoder[s];
+#else
+        text += m_clip_text_byte_decoder[s];
+#endif
     }
 
     text = std::regex_replace(text, kWord, " "); // remove '</w>'
