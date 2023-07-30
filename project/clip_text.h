@@ -22,12 +22,12 @@ struct CLIPText {
 public:
     std::vector<uint32_t> encode(const std::string& text);
     std::string decode(const std::vector<uint32_t>& tokens);
-    std::vector<std::string> bpe(const std::string& token);
+    std::string bpe(const std::string& token_word);
 
 private:
 	std::map<std::string, std::string> m_cache {
-		{"<|startoftext|>": "<|startoftext|>"},
-		{"<|endoftext|>": "<|endoftext|>"}
+		{"<|startoftext|>", "<|startoftext|>"},
+		{"<|endoftext|>", "<|endoftext|>"}
 	};
 };
 #endif // CLIP_TEXT_H
@@ -44,8 +44,7 @@ private:
 
 #include "codec.h"
 
-#define BPE_SEPERATOR " " # should match seperator of clip_text_bpe_ranks key 
-
+#define BPE_SEPERATOR " " // should match seperator of clip_text_bpe_ranks key 
 
 static std::vector<std::string> get_clip_words(std::string str)
 {
@@ -73,14 +72,15 @@ static std::vector<std::string> get_clip_words(std::string str)
     return words;
 }
 
-
-std::pair<std::string, std::string> split_tokens(std::string s, std::string delimiter)
+static std::pair<std::string, std::string> split_bpe_pair(std::string s)
 {
+    std::string delimiter = BPE_SEPERATOR;
+
     auto pos = s.find(delimiter);
     return std::make_pair(s.substr(0, pos), s.substr(pos + delimiter.length()));
 }
 
-int list_str_index(std::vector<std::string> list, std::string element, int start)
+static int list_str_index(std::vector<std::string> list, std::string element, int start)
 {
     // Equivalent to: list.index(element, start)
     for (std::size_t i = start; i < list.size(); ++i) {
@@ -90,8 +90,7 @@ int list_str_index(std::vector<std::string> list, std::string element, int start
     return -1;
 }
 
-
-std::vector<std::string> get_pairs(std::vector<std::string> token_list)
+static std::vector<std::string> get_bpe_pairs(std::vector<std::string> token_list)
 {
     std::vector<std::string> pairs_vec;
     std::unordered_set<std::string> pairs;
@@ -108,7 +107,7 @@ std::vector<std::string> get_pairs(std::vector<std::string> token_list)
     return pairs_vec;
 }
 
-uint32_t GetBPEMergeRank_(std::string pair)
+static uint32_t get_bpe_rank_index(std::string pair)
 {
     if (clip_text_bpe_ranks.find(pair) != clip_text_bpe_ranks.end()) {
         return clip_text_bpe_ranks.at(pair);
@@ -116,16 +115,16 @@ uint32_t GetBPEMergeRank_(std::string pair)
     return 0xfffffffe;// enough than vocab size
 }
 
-std::string FindBestPair_(std::vector<std::string> pairs)
+static std::string find_best_bpe_pair(std::vector<std::string> pairs)
 {
     // Equivalent to:
     //    min(pairs, key = lambda pair: self.bpe_merge_ranks.get(pair,
     //    float('inf')))
     uint32_t best_pair_idx = 0;
-    uint32_t best_rank = GetBPEMergeRank_(pairs[best_pair_idx]);
+    uint32_t best_rank = get_bpe_rank_index(pairs[best_pair_idx]);
 
     for (std::size_t i = 1; i < pairs.size(); ++i) {
-        uint32_t rank = GetBPEMergeRank_(pairs[i]);
+        uint32_t rank = get_bpe_rank_index(pairs[i]);
         if (rank < best_rank) {
             best_pair_idx = i;
             best_rank = rank;
@@ -143,12 +142,12 @@ std::vector<uint32_t> CLIPText::encode(const std::string& text)
     std::vector<std::string> words = get_clip_words(text);
 
     for (std::string word: words) {
-        std::cout << w << std::endl;
+        // std::cout << word << std::endl;
         std::string token_word;
         for (size_t i = 0; i < word.size(); i++)
             token_word.push_back(clip_text_byte_encoder[(uint32_t)word.at(i)]);
 
-        bpe_word = bpe(token_word);
+        std::string bpe_word = bpe(token_word);
         bpe_tokens.push_back(clip_text_word_encoder[bpe_word]);
     }
 
@@ -172,17 +171,18 @@ std::string CLIPText::bpe(const std::string& token_word)
     }
     // example "hello" --> ("h", "e", "l", "l", "o</w>")
 
-    std::vector<std::string> pairs = get_pairs(token_list);
+    std::vector<std::string> pairs = get_bpe_pairs(token_list);
+    // ("he", "el", "ll", "lo</w>")
+
     if (pairs.empty())
         return { token_word + "</w>" };
 
-
     while (true) {
-        auto bigram = FindBestPair_(pairs); // bi-gram
+        std::string bigram = find_best_bpe_pair(pairs); // bi-gram
         if (clip_text_bpe_ranks.find(bigram) == clip_text_bpe_ranks.end())
             break;
 
-        auto parts = split_tokens(bigram, BPE_SEPERATOR);
+        auto parts = split_bpe_pair(bigram);
         std::vector<std::string> new_token_list;
         std::size_t i = 0;
         while (i < token_list.size()) {
@@ -210,11 +210,11 @@ std::string CLIPText::bpe(const std::string& token_word)
         if (token_list.size() == 1) {
             break;
         } else {
-            pairs = get_pairs(token_list);
+            pairs = get_bpe_pairs(token_list);
         }
     }
 
-    bpe_word = token_list.at(0)
+    bpe_word = token_list.at(0);
     m_cache.insert(token_word, bpe_word);
 
 	return bpe_word;	

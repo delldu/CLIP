@@ -18,6 +18,10 @@ import pdb
 
 codec = SimpleTokenizer()
 
+def x(str):
+    str = str.replace("\\", "\\" + "\\")
+    str = str.replace("\"", "\\" + "\"")
+    return str
 
 def create_byte_encoder_code():
     '''
@@ -28,7 +32,7 @@ def create_byte_encoder_code():
     '''
     print("static std::map<uint32_t, std::string> clip_text_byte_encoder {")
     for k, v in codec.byte_encoder.items():
-        print(f"    {{{k}, \"{v}\"}},")
+        print(f"    {{{k}, \"{x(v)}\"}},")
     print("};")
 
 
@@ -42,7 +46,7 @@ def create_word_encoder_code():
     '''
     print("static std::map<std::string, uint32_t> clip_text_word_encoder {")
     for k, v in codec.encoder.items():
-        print(f"    {{\"{k}\", {v}}},")
+        print(f"    {{\"{x(k)}\", {v}}},")
     print("};")
 
 
@@ -54,7 +58,7 @@ def create_bpe_ranks_code():
     '''
     print("static std::map<std::string, uint32_t> clip_text_bpe_ranks {")
     for k, v in codec.bpe_ranks.items():
-        print(f"    {{\"{k[0]} {k[1]}\", {v}}},")
+        print(f"    {{\"{x(k[0])} {x(k[1])}\", {v}}},")
     print("};")
 
 
@@ -67,7 +71,7 @@ def create_byte_decoder_code():
     '''
     print("static std::map<std::string, uint32_t> clip_text_byte_decoder {")
     for k, v in codec.byte_decoder.items():
-        print(f"    {{\"{k}\", {v}}},")
+        print(f"    {{\"{x(k)}\", {v}}},")
     print("};")
 
 
@@ -82,7 +86,7 @@ def create_word_decoder_code():
 
     print("static std::map<uint32_t, std::string> clip_text_word_decoder {")
     for k, v in codec.decoder.items():
-        print(f"    {{{k}, \"{v}\"}},")
+        print(f"    {{{k}, \"{x(v)}\"}},")
     print("};")
 
 
