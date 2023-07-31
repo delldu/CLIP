@@ -1,6 +1,6 @@
 /************************************************************************************
 ***
-***	Copyright 2023 Dell(dellrunning@gmail.com), All Rights Reserved.
+***	Copyright 2023 Dell(18588220928@163.com), All Rights Reserved.
 ***
 ***	File Author: Dell, Fri 28 Jul 2023 12:36:25 PM CST
 ***
@@ -12,7 +12,7 @@
 
 int main(int argc, char** argv)
 {
-	std::string text = "a diagram, hello world, good, man, women !";
+    std::string text = "a diagram, hello world, good, man, women !";
     CLIPText* codec = new CLIPText();
 
     std::vector<uint32_t> tokens = codec->encode(text);
@@ -24,8 +24,6 @@ int main(int argc, char** argv)
     std::cout << "Decode: " << std::endl;
     std::string words = codec->decode(tokens);
     std::cout << words << std::endl;
-
-	// test();
 
     return 0;
 }
