@@ -6,20 +6,16 @@
 ***
 ************************************************************************************/
 
-#include "clip_text.h"
+#include "clip_token.h"
 
 #include <regex>
 #include <unordered_set>
 #include <unordered_map>
 
 #define BPE_SEPERATOR " " // same as seperator of bpe ranks key
+#define ARRAY_SIZE(x) (int)(sizeof(x) / sizeof(x[0]))
 
-// #include "clip_codec.cpp"
-extern std::unordered_map<uint32_t, std::string> codec_byte_encoder;
-extern std::unordered_map<std::string, uint32_t> codec_word_encoder;
-extern std::unordered_map<std::string, uint32_t> codec_bpe_ranks;
-extern std::unordered_map<std::string, uint32_t> codec_byte_decoder;
-extern std::unordered_map<uint32_t, std::string> codec_word_decoder;
+#include "clip_codec.h" // including codec_byte_list, codec_word_list, bpe_ranks_list
 
 static std::vector<std::string> get_clip_words(std::string str)
 {
@@ -82,15 +78,15 @@ static std::vector<std::string> get_bpe_pairs(std::vector<std::string> token_lis
     return pairs_vec;
 }
 
-static uint32_t get_bpe_rank_index(std::string pair)
+uint32_t CLIPToken::get_bpe_rank_index(std::string pair)
 {
-    if (codec_bpe_ranks.find(pair) != codec_bpe_ranks.end()) {
-        return codec_bpe_ranks.at(pair);
+    if (m_bpe_ranks.find(pair) != m_bpe_ranks.end()) {
+        return m_bpe_ranks.at(pair);
     }
     return 0xfffffffe; // one const more than vocab size
 }
 
-static std::string find_best_bpe_pair(std::vector<std::string> pairs)
+std::string CLIPToken::find_best_bpe_pair(std::vector<std::string> pairs)
 {
     uint32_t best_pair_index = 0;
     uint32_t best_rank = get_bpe_rank_index(pairs[best_pair_index]);
@@ -105,7 +101,36 @@ static std::string find_best_bpe_pair(std::vector<std::string> pairs)
     return pairs[best_pair_index];
 }
 
-std::vector<uint32_t> CLIPText::encode(const std::string& text)
+CLIPToken::CLIPToken()
+{
+    // std::unordered_map<uint32_t, std::string> m_byte_encoder;
+    // std::unordered_map<std::string, uint32_t> m_word_encoder;
+    // std::unordered_map<std::string, uint32_t> m_bpe_ranks;
+
+    std::string s;
+    for (uint32_t i = 0; i < ARRAY_SIZE(codec_byte_list); i++) {
+        s = codec_byte_list[i];
+        m_byte_encoder[i] = s;
+    }
+
+    for (uint32_t i = 0; i < ARRAY_SIZE(codec_word_list); i++) {
+        s = codec_word_list[i];
+        m_word_encoder[s] = i;
+    }
+
+    for (uint32_t i = 0; i < ARRAY_SIZE(bpe_ranks_list); i++) {
+        s = bpe_ranks_list[i];
+        m_bpe_ranks[s] = i;
+    }
+
+    for (auto &x:m_byte_encoder)
+        m_byte_decoder[x.second] = x.first;
+
+    for (auto &x:m_word_encoder)
+        m_word_decoder[x.second] = x.first;
+}
+
+std::vector<uint32_t> CLIPToken::encode(const std::string& text)
 {
     std::vector<uint32_t> bpe_tokens;
 
@@ -116,21 +141,21 @@ std::vector<uint32_t> CLIPText::encode(const std::string& text)
         // convert normal word to bpe word
         std::string bpe_word = "";
         for (size_t i = 0; i < word.size(); i++) {
-            bpe_word += codec_byte_encoder[(uint32_t)word.at(i)]; // codec_byte_encoder[0..255], so here is safe
+            bpe_word += m_byte_encoder[(uint32_t)word.at(i)]; // m_byte_encoder[0..255], so here is safe
         }
 
         std::string best_match_word = bpe(bpe_word);
 
         // convert bpe word to token
-        if (codec_word_encoder.find(best_match_word) != codec_word_encoder.end()) {
-            bpe_tokens.push_back(codec_word_encoder[best_match_word]);
+        if (m_word_encoder.find(best_match_word) != m_word_encoder.end()) {
+            bpe_tokens.push_back(m_word_encoder[best_match_word]);
         }
     }
 
     return bpe_tokens;
 }
 
-std::string CLIPText::bpe(const std::string& bpe_word)
+std::string CLIPToken::bpe(const std::string& bpe_word)
 {
     std::string s, best_match_word;
 
@@ -154,7 +179,7 @@ std::string CLIPText::bpe(const std::string& bpe_word)
 
     while (true) {
         std::string bigram = find_best_bpe_pair(pairs); // bi-gram
-        if (codec_bpe_ranks.find(bigram) == codec_bpe_ranks.end())
+        if (m_bpe_ranks.find(bigram) == m_bpe_ranks.end())
             break;
 
         auto parts = split_bpe_pair(bigram);
@@ -198,7 +223,7 @@ std::string CLIPText::bpe(const std::string& bpe_word)
     return best_match_word;
 }
 
-std::string CLIPText::decode(const std::vector<uint32_t>& tokens)
+std::string CLIPToken::decode(const std::vector<uint32_t>& tokens)
 {
     const std::regex kWord(R"(</w>|</W>)");
     std::string s;
@@ -209,8 +234,8 @@ std::string CLIPText::decode(const std::vector<uint32_t>& tokens)
     std::string bpe_words = "";
     for (size_t i = 0; i < tokens.size(); i++) {
         uint32_t t = tokens.at(i);
-        if (codec_word_decoder.find(t) != codec_word_decoder.end()) {
-            bpe_words += codec_word_decoder[t];
+        if (m_word_decoder.find(t) != m_word_decoder.end()) {
+            bpe_words += m_word_decoder[t];
         }
     }
 
@@ -218,8 +243,8 @@ std::string CLIPText::decode(const std::vector<uint32_t>& tokens)
     for (size_t i = 0; i < bpe_words.size(); i++) {
         s = bpe_words.at(i);
 
-        if (codec_byte_decoder.find(s) != codec_byte_decoder.end()) {
-            text += codec_byte_decoder[s];
+        if (m_byte_decoder.find(s) != m_byte_decoder.end()) {
+            text += m_byte_decoder[s];
         }
     }
 

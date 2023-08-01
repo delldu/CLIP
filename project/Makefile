@@ -10,7 +10,7 @@
 TARGET := clip_token
 
 SOURCE :=  \
-	main.cpp clip_text.cpp clip_codec.cpp
+	main.cpp clip_token.cpp
 
 INCS	:=
 	#  -I$(BUILD_DIR)/include
@@ -35,7 +35,7 @@ OBJECT := $(addsuffix .o,$(basename ${SOURCE}))
 #****************************************************************************
 all: ${TARGET}
 
-${TARGET}: ${OBJECT} clip_text.h
+${TARGET}: ${OBJECT} clip_codec.h
 	${CXX} ${LDFLAGS} -o ${TARGET} ${OBJECT} ${LIBS}
 
 install:
