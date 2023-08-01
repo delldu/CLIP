@@ -255,6 +255,7 @@ class CLIP(nn.Module):
                  transformer_layers: int
                  ):
         super().__init__()
+
         # embed_dim = 512
 
         # image_resolution = 224
@@ -306,6 +307,19 @@ class CLIP(nn.Module):
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07)) # 14.285714285714285 --> 2.6593 for requires_grad=True
         # self.logit_scale.exp() -- 14.2857
         self.initialize_parameters()
+
+        # for ViT-L/14 Model:
+        #   embed_dim = 768
+        #   image_resolution = 224
+        #   vision_layers = 24
+        #   vision_width = 1024
+        #   vision_patch_size = 14
+        #   context_length = 77
+        #   vocab_size = 49408
+        #   transformer_width = 768
+        #   transformer_heads = 12
+        #   transformer_layers = 12
+
 
     def initialize_parameters(self):
         nn.init.normal_(self.token_embedding.weight, std=0.02)

@@ -9,14 +9,17 @@ import pdb
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# model, preprocess = clip.load("ViT-B/32", device=device)
-model, preprocess = clip.load("./download/ViT-B-32.pt", device=device)
+model, preprocess = clip.load("ViT-B/32", device=device)
+# model, preprocess = clip.load("./download/ViT-B-32.pt", device=device)
+# model, preprocess = clip.load("ViT-L/14", device=device)
+
 
 model = model.eval()
 # model -- CLIP(...)
 
 
 # model = torch.jit.script(model)
+# torch.jit.script(model.visual)
 # model = torch.compile(model)
 
 # model.visual
@@ -58,3 +61,4 @@ with torch.no_grad():
 
 print("ViT-B-32:", "[[0.9927937  0.00421068 0.00299572]]")
 print("Label probs:", probs)  # prints: [[0.9927937  0.00421068 0.00299572]]
+
