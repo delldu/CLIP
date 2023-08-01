@@ -26,9 +26,9 @@ int main(int argc, char** argv)
     std::cout << words << std::endl;
 
     // Encode: a diagram, hello world, good, man, women !
-    // 320 22697 3306 1002 886 786 1507 
-    // Decode: 
-    // a diagram hello world good man women 
+    // 320 22697 3306 1002 886 786 1507
+    // Decode:
+    // a diagram hello world good man women
 
     return 0;
 }

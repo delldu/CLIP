@@ -9,9 +9,8 @@
 #define CLIP_TOKEN_H
 
 #include <iostream>
-#include <vector>
 #include <unordered_map>
-
+#include <vector>
 
 struct CLIPToken {
 public:
