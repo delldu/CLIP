@@ -1,43 +1,32 @@
 import torch
 import clip
 from PIL import Image
+import numpy as np
 import pdb
 
-# from clip.simple_tokenizer import SimpleTokenizer
-# model.byte_encoder
 
+torch.set_printoptions(sci_mode=False)
+np.set_printoptions(suppress=True)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-model, preprocess = clip.load("ViT-B/32", device=device)
-# model, preprocess = clip.load("./download/ViT-B-32.pt", device=device)
+# model, preprocess = clip.load("./download/ViT-B-16.pt", device=device)
+model, preprocess = clip.load("./download/ViT-B-32.pt", device=device)
 # model, preprocess = clip.load("ViT-L/14", device=device)
-
+model = model.to(device)
 
 model = model.eval()
 # model -- CLIP(...)
-
 
 # model = torch.jit.script(model)
 # torch.jit.script(model.visual)
 # model = torch.compile(model)
 
-# model.visual
-# model.self.transformer
-
-
 # model = torch.compile(model)
 
-# model -- CLIP
-# preprocess -- 
-# Compose(
-#     Resize(size=224, interpolation=bicubic, max_size=None, antialias=warn)
-#     CenterCrop(size=(224, 224))
-#     ToTensor()
-#     Normalize(mean=(0.48145466, 0.4578275, 0.40821073), std=(0.26862954, 0.26130258, 0.27577711))
-# )
 
-image = preprocess(Image.open("CLIP.png")).unsqueeze(0).to(device)
+
+image = preprocess(Image.open("CLIP.png").convert("RGB")).unsqueeze(0).to(device)
 # image.size() -- [1, 3, 224, 224]
 
 text = clip.tokenize(["a diagram", "a dog", "a cat"]).to(device)
@@ -59,6 +48,7 @@ with torch.no_grad():
 
     probs = logits_per_image.softmax(dim=-1).cpu().numpy()
 
-print("ViT-B-32:", "[[0.9927937  0.00421068 0.00299572]]")
-print("Label probs:", probs)  # prints: [[0.9927937  0.00421068 0.00299572]]
+print("ViT-B-32 Standard:", "[[0.9927937  0.00421068 0.00299572]]")
+print("Probs:", probs)  # prints: [[0.9927937  0.00421068 0.00299572]]
+
 

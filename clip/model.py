@@ -4,6 +4,7 @@ from typing import Tuple, Union
 import numpy as np
 import torch
 import torch.nn.functional as F
+from torchvision import transforms as T
 from torch import nn
 import pdb
 
@@ -241,55 +242,47 @@ class VisionTransformer(nn.Module):
 
 class CLIP(nn.Module):
     def __init__(self,
-                 embed_dim: int,
+                 embed_dim = 512,
                  # vision
-                 image_resolution: int,
-                 vision_layers: Union[Tuple[int, int, int, int], int],
-                 vision_width: int,
-                 vision_patch_size: int,
+                 image_resolution = 224,
+                 vision_layers = 12,
+                 vision_width = 768,
+                 vision_patch_size = 32,
                  # text
-                 context_length: int,
-                 vocab_size: int,
-                 transformer_width: int,
-                 transformer_heads: int,
-                 transformer_layers: int
+                 context_length = 77,
+                 vocab_size = 49408,
+                 transformer_width = 512,
+                 transformer_heads = 8,
+                 transformer_layers = 12,
+                 version = "ViT-B-32"
                  ):
         super().__init__()
+        if version == "ViT-B-16":
+            vision_patch_size = 16
+        elif version == "ViT-B-32":
+            pass
+        elif version == "ViT-L-14":
+            embed_dim = 768
+            vision_layers = 24
+            vision_width = 1024
+            vision_patch_size = 14
+            transformer_width = 768
+            transformer_heads = 12
+        else:
+            assert False, f"NO Support CLIP {version}"
 
-        # embed_dim = 512
-
-        # image_resolution = 224
-        # vision_layers = 12
-        # vision_width = 768
-        # vision_patch_size = 32
-
-        # context_length = 77
-        # vocab_size = 49408
-        # transformer_width = 512
-        # transformer_heads = 8
-        # transformer_layers = 12
-
+        self.version = version
         self.context_length = context_length
 
-        if isinstance(vision_layers, (tuple, list)): # False
-            vision_heads = vision_width * 32 // 64
-            self.visual = ModifiedResNet(
-                layers=vision_layers,
-                output_dim=embed_dim,
-                heads=vision_heads,
-                input_resolution=image_resolution,
-                width=vision_width
-            )
-        else:
-            vision_heads = vision_width // 64
-            self.visual = VisionTransformer(
-                input_resolution=image_resolution,
-                patch_size=vision_patch_size,
-                width=vision_width,
-                layers=vision_layers,
-                heads=vision_heads,
-                output_dim=embed_dim
-            )
+        vision_heads = vision_width // 64
+        self.visual = VisionTransformer(
+            input_resolution=image_resolution,
+            patch_size=vision_patch_size,
+            width=vision_width,
+            layers=vision_layers,
+            heads=vision_heads,
+            output_dim=embed_dim
+        )
 
         self.transformer = Transformer(
             width=transformer_width,
@@ -307,18 +300,7 @@ class CLIP(nn.Module):
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07)) # 14.285714285714285 --> 2.6593 for requires_grad=True
         # self.logit_scale.exp() -- 14.2857
         self.initialize_parameters()
-
-        # for ViT-L/14 Model:
-        #   embed_dim = 768
-        #   image_resolution = 224
-        #   vision_layers = 24
-        #   vision_width = 1024
-        #   vision_patch_size = 14
-        #   context_length = 77
-        #   vocab_size = 49408
-        #   transformer_width = 768
-        #   transformer_heads = 12
-        #   transformer_layers = 12
+        self.image_normal = T.Normalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])
 
 
     def initialize_parameters(self):
@@ -363,7 +345,12 @@ class CLIP(nn.Module):
         return self.visual.conv1.weight.dtype
 
     def encode_image(self, image):
-        return self.visual(image.type(self.dtype))
+        x = image.clone()
+        x = F.interpolate(x, size=(224, 224), mode="bilinear", align_corners=False)
+        for i in range(x.size(0)):
+            x[i] = self.image_normal(x[i])
+
+        return self.visual(x.type(self.dtype))
 
     def encode_text(self, text):
         x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]

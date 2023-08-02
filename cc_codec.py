@@ -10,7 +10,7 @@
 # ************************************************************************************/
 #
 # cc_codec -- Create C/C++ codec
-# python cc_codec.py | tee project/clip_codec.h
+# python cc_codec.py | tee clip_token/clip_codec.h
 
 from clip.simple_tokenizer import SimpleTokenizer
 import pdb
