@@ -163,6 +163,7 @@ class CLIP(nn.Module):
 
         load_weights(self, f"models/{self.version}.pth")
         convert_weights(self) # reduce model size, torch.jit.script OK
+        pdb.set_trace()
 
 
     def initialize_parameters(self):

@@ -30,7 +30,7 @@ torch.set_printoptions(sci_mode=False)
 tokenizer = SimpleTokenizer()
 
 
-def tokenize(texts, context_length: int = 77, truncate: bool = False):
+def tokenize(texts, context_length: int = 77, truncate: bool = True):
     # texts = ['a diagram', 'a dog', 'a cat']
 
     if isinstance(texts, str):
@@ -40,8 +40,9 @@ def tokenize(texts, context_length: int = 77, truncate: bool = False):
     eot_token = tokenizer.encoder["<|endoftext|>"]
     all_tokens = [[sot_token] + tokenizer.encode(text) + [eot_token] for text in texts]
     result = torch.zeros(len(all_tokens), context_length, dtype=torch.int)
+    # result.fill_(eot_token)
 
-    # (Pdb) sot_token -- 49406, eot_token -- 49407
+    # sot_token -- 49406, eot_token -- 49407
 
     # (Pdb) all_tokens[0] -- [49406, 320, 22697, 49407]
     # (Pdb) all_tokens[1] -- [49406, 320, 1929, 49407]
