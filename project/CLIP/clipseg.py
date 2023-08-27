@@ -22,6 +22,7 @@ class CLIPSeg(nn.Module):
         self.MAX_H = 1024
         self.MAX_W = 1024
         # self.MAX_TIMES = 16
+        # GPU 2G
 
         self.version = version
         self.extract_layers = extract_layers

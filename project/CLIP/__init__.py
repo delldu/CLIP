@@ -33,7 +33,11 @@ def blender(input_tensor, output_masks):
     masks_tensor = input_tensor.clone()
 
     for i, m in enumerate(output_masks):
-        c = [30 / 255.0, 144 / 255.0, 255 / 255.0]
+        if i % 2 == 0:
+            c = [255 / 255.0, 144 / 255.0, 30 / 255.0]
+        else:
+            c = [30 / 255.0, 144 / 255.0, 255 / 255.0]
+
         masks_tensor[:, 0:1, :, :] = torch.where(m, c[0], masks_tensor[:, 0:1, :, :])
         masks_tensor[:, 1:2, :, :] = torch.where(m, c[1], masks_tensor[:, 1:2, :, :])
         masks_tensor[:, 2:3, :, :] = torch.where(m, c[2], masks_tensor[:, 2:3, :, :])
@@ -194,7 +198,7 @@ def segment(test_dataset, output_dir):
 
         text = tokenize(test_dataset[filename]).to(device)
         with torch.no_grad():
-            masks = model(input_tensor, text) > 0.5
+            masks = model(input_tensor, text) > 0.50
 
         output_tensor = blender(clone_tensor, masks.cpu())
         output_file = f"{output_dir}/{os.path.basename(filename)}"
