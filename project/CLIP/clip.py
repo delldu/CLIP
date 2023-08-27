@@ -21,12 +21,12 @@ def load_weights(model, model_path):
 
 
 class QuickGELU(nn.Module):
-    def forward(self, x: torch.Tensor):
+    def forward(self, x):
         return x * torch.sigmoid(1.702 * x)
 
 
 class ResidualAttentionBlock(nn.Module):
-    def __init__(self, d_model: int, n_head: int, attn_mask: torch.Tensor = None):
+    def __init__(self, d_model: int, n_head: int, attn_mask = None):
         super().__init__()
 
         self.attn = nn.MultiheadAttention(d_model, n_head)
@@ -39,25 +39,25 @@ class ResidualAttentionBlock(nn.Module):
         self.ln_2 = nn.LayerNorm(d_model) # LayerNorm(d_model), support torch.jit.script
         self.attn_mask = attn_mask
 
-    def attention(self, x: torch.Tensor):
+    def attention(self, x):
         self.attn_mask = self.attn_mask.to(dtype=x.dtype, device=x.device) if self.attn_mask is not None else None
         return self.attn(x, x, x, need_weights=False, attn_mask=self.attn_mask)[0]
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x):
         x = x + self.attention(self.ln_1(x.to(torch.float32)).to(x.dtype)) # support torch.jit.script
         x = x + self.mlp(self.ln_2(x.to(torch.float32)).to(x.dtype)) # support torch.jit.script
         return x
 
 
 class Transformer(nn.Module):
-    def __init__(self, width: int, layers: int, heads: int, attn_mask: torch.Tensor = None):
+    def __init__(self, width: int, layers: int, heads: int, attn_mask = None):
         super().__init__()
         self.width = width
         self.layers = layers
         self.resblocks = nn.Sequential(*[ResidualAttentionBlock(width, heads, attn_mask) 
             for _ in range(layers)])
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x):
         return self.resblocks(x)
 
 
@@ -79,7 +79,7 @@ class VisionTransformer(nn.Module):
         self.ln_post = nn.LayerNorm(width) # LayerNorm(width), support torch.jit.script 
         self.proj = nn.Parameter(scale * torch.randn(width, output_dim))
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x):
         x = self.conv1(x)  # shape = [*, width, grid, grid]
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
         x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
@@ -203,7 +203,7 @@ class CLIP(nn.Module):
         for i in range(image.size(0)):
             image[i] = self.image_normal(image[i])
 
-        return self.visual(image.type(self.dtype))
+        return self.visual(image.type(self.dtype)).to(torch.float32)
 
     def encode_text(self, text):
         x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
@@ -218,7 +218,7 @@ class CLIP(nn.Module):
         # take features from the eot embedding (eot_token is the highest number in each sequence)
         x = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] @ self.text_projection
 
-        return x
+        return x.to(torch.float32)
 
     def forward(self, image, text):
         image_features = self.encode_image(image)
@@ -227,11 +227,6 @@ class CLIP(nn.Module):
         # normalized features, support torch.jit.script
         image_features = image_features / image_features.norm(p=2.0, dim=1, keepdim=True)
         text_features = text_features / text_features.norm(p=2.0, dim=1, keepdim=True)
-
-        # image_features.dtype==torch.float16
-        # text_features.dtype==torch.float16
-        image_features = image_features.to(torch.float32)
-        text_features = text_features.to(torch.float32)
 
         # cosine similarity as logits
         logit_scale = self.logit_scale.exp() # 100.00 for ViT-B-32

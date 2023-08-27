@@ -92,7 +92,7 @@ class CLIPSeg(nn.Module):
         if bs > 1:
             image = image.repeat(bs, 1, 1, 1)
 
-        cond = self.backbone.encode_text(text).to(torch.float32) # [2, 512]
+        cond = self.backbone.encode_text(text) # [2, 512]
 
         # self.extract_layers -- (0, 3, 6, 9)
         activations: List[torch.Tensor] = self.visual_forward(image)
