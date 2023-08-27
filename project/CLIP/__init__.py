@@ -1,4 +1,4 @@
-"""Image Recognize Anything Model Package."""  # coding=utf-8
+"""CLIP Model Package."""  # coding=utf-8
 #
 # /************************************************************************************
 # ***
@@ -21,13 +21,24 @@ from torchvision.transforms import Compose, ToTensor
 
 from .clip import CLIP
 from .simple_tokenizer import SimpleTokenizer
-
+from .clipseg import CLIPSeg
 import pdb
 
 torch.set_printoptions(sci_mode=False)
 
 
 tokenizer = SimpleTokenizer()
+
+def blender(input_tensor, output_masks):
+    masks_tensor = input_tensor.clone()
+
+    for i, m in enumerate(output_masks):
+        c = [30 / 255.0, 144 / 255.0, 255 / 255.0]
+        masks_tensor[:, 0:1, :, :] = torch.where(m, c[0], masks_tensor[:, 0:1, :, :])
+        masks_tensor[:, 1:2, :, :] = torch.where(m, c[1], masks_tensor[:, 1:2, :, :])
+        masks_tensor[:, 2:3, :, :] = torch.where(m, c[2], masks_tensor[:, 2:3, :, :])
+
+    return 0.5 * input_tensor + 0.5 * masks_tensor
 
 
 def tokenize(texts, context_length: int = 77, truncate: bool = True):
@@ -40,7 +51,7 @@ def tokenize(texts, context_length: int = 77, truncate: bool = True):
     eot_token = tokenizer.encoder["<|endoftext|>"]
     all_tokens = [[sot_token] + tokenizer.encode(text) + [eot_token] for text in texts]
     result = torch.zeros(len(all_tokens), context_length, dtype=torch.int)
-    # result.fill_(eot_token)
+    result.fill_(eot_token)
 
     # sot_token -- 49406, eot_token -- 49407
 
@@ -80,6 +91,12 @@ def get_model(version):
 
     model, device = create_model(version)
     # print(model)
+
+    # https://github.com/pytorch/pytorch/issues/52286
+    torch._C._jit_set_profiling_executor(False)
+    # C++ Reference
+    # torch::jit::getProfilingMode() = false;
+    # torch::jit::setTensorExprFuserEnabled(false);
 
     model = torch.jit.script(model)
     todos.data.mkdir("output")
@@ -127,5 +144,62 @@ def predict(input_files, output_dir):
     progress_bar.close()
 
     print("\n".join(results))
+
+    todos.model.reset_device()
+
+
+def get_segment_model():
+    """Load jit script model."""
+
+    model = CLIPSeg()
+    device = todos.model.get_device()
+    model = model.to(device)
+    model.eval()
+    print(f"Running model on {device} ...")
+
+
+    # https://github.com/pytorch/pytorch/issues/52286
+    torch._C._jit_set_profiling_executor(False)
+    # C++ Reference
+    # torch::jit::getProfilingMode() = false;
+    # torch::jit::setTensorExprFuserEnabled(false);
+
+    model = torch.jit.script(model)
+    todos.data.mkdir("output")
+    torch_file_name = f"output/CLIPSeg.torch"
+    if not os.path.exists(torch_file_name):
+        model.save(torch_file_name)
+
+    return model, device
+
+def segment(test_dataset, output_dir):
+    # Create directory to store result
+    todos.data.mkdir(output_dir)
+
+    # load model
+    model, device = get_segment_model()
+    transform = Compose([
+        lambda image: image.convert("RGB"),
+        ToTensor(),
+    ])
+
+    # start predict
+    progress_bar = tqdm(total=len(test_dataset))
+    for filename in test_dataset:
+        progress_bar.update(1)
+
+        image = Image.open(filename).convert("RGB")
+        input_tensor = transform(image).unsqueeze(0).to(device)
+        clone_tensor = transform(image).unsqueeze(0)
+
+        text = tokenize(test_dataset[filename]).to(device)
+        with torch.no_grad():
+            masks = model(input_tensor, text) > 0.5
+
+        output_tensor = blender(clone_tensor, masks.cpu())
+        output_file = f"{output_dir}/{os.path.basename(filename)}"
+        todos.data.save_tensor([clone_tensor, output_tensor], output_file)
+
+    progress_bar.close()
 
     todos.model.reset_device()

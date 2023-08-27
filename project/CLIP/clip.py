@@ -2,9 +2,9 @@ from collections import OrderedDict
 import os
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import transforms as T
-from torch import nn
 import pdb
 
 
@@ -54,7 +54,8 @@ class Transformer(nn.Module):
         super().__init__()
         self.width = width
         self.layers = layers
-        self.resblocks = nn.Sequential(*[ResidualAttentionBlock(width, heads, attn_mask) for _ in range(layers)])
+        self.resblocks = nn.Sequential(*[ResidualAttentionBlock(width, heads, attn_mask) 
+            for _ in range(layers)])
 
     def forward(self, x: torch.Tensor):
         return self.resblocks(x)
@@ -65,11 +66,12 @@ class VisionTransformer(nn.Module):
         super().__init__()
         self.input_resolution = input_resolution
         self.output_dim = output_dim
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=width, kernel_size=patch_size, stride=patch_size, bias=False)
-
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=width, kernel_size=patch_size, 
+            stride=patch_size, bias=False)
         scale = width ** -0.5
         self.class_embedding = nn.Parameter(scale * torch.randn(width))
-        self.positional_embedding = nn.Parameter(scale * torch.randn((input_resolution // patch_size) ** 2 + 1, width))
+        self.positional_embedding = nn.Parameter(scale * torch.randn(
+            (input_resolution // patch_size) ** 2 + 1, width))
         self.ln_pre = nn.LayerNorm(width) # LayerNorm(width), support torch.jit.script
 
         self.transformer = Transformer(width, layers, heads)
@@ -156,15 +158,16 @@ class CLIP(nn.Module):
         self.ln_final = nn.LayerNorm(transformer_width) # LayerNorm(transformer_width), support torch.jit.script
 
         self.text_projection = nn.Parameter(torch.empty(transformer_width, embed_dim)) # [512, 512]
-        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07)) # 14.285714285714285 --> 2.6593 for requires_grad=True
+        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07)) # 14.285714285714285 --> 2.6593
         # self.logit_scale.exp() -- 100.00 ?
         self.initialize_parameters()
         self.image_normal = T.Normalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])
 
         load_weights(self, f"models/{self.version}.pth")
         convert_weights(self) # reduce model size, torch.jit.script OK
-        pdb.set_trace()
 
+        for param in self.parameters():
+            param.requires_grad = False
 
     def initialize_parameters(self):
         nn.init.normal_(self.token_embedding.weight, std=0.02)
@@ -225,6 +228,11 @@ class CLIP(nn.Module):
         image_features = image_features / image_features.norm(p=2.0, dim=1, keepdim=True)
         text_features = text_features / text_features.norm(p=2.0, dim=1, keepdim=True)
 
+        # image_features.dtype==torch.float16
+        # text_features.dtype==torch.float16
+        image_features = image_features.to(torch.float32)
+        text_features = text_features.to(torch.float32)
+
         # cosine similarity as logits
         logit_scale = self.logit_scale.exp() # 100.00 for ViT-B-32
         logits_per_image = logit_scale * image_features @ text_features.t()
@@ -254,3 +262,9 @@ def convert_weights(model: nn.Module):
                     attr.data = attr.data.half()
 
     model.apply(_convert_weights_to_fp16)
+
+
+if __name__ == '__main__':
+    model = CLIP()
+    model = torch.jit.script(model)
+    print(model)
