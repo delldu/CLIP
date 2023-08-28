@@ -19,10 +19,10 @@ class CLIPSeg(nn.Module):
         n_heads=4,
     ):
         super().__init__()
-        self.MAX_H = 1024
-        self.MAX_W = 1024
+        self.MAX_H = 512
+        self.MAX_W = 512
         # self.MAX_TIMES = 16
-        # GPU 2G
+        # GPU 2G -- 1024x1024
 
         self.version = version
         self.extract_layers = extract_layers
@@ -81,11 +81,7 @@ class CLIPSeg(nn.Module):
             text.size() -- [2, 77], text is tokens
         '''
         B, C, H, W = image.size()
-        if H > self.MAX_H or W > self.MAX_W:
-            image =  F.interpolate(image, size=(self.MAX_H, self.MAX_W), mode="bilinear", align_corners=True)
-        else:
-            image =  F.interpolate(image, size=(self.MAX_H//2, self.MAX_W//2), mode="bilinear", align_corners=True)
-
+        image =  F.interpolate(image, size=(self.MAX_H, self.MAX_W), mode="bilinear", align_corners=True)
         image = self.image_normal(image)
 
         bs = text.shape[0]
@@ -102,7 +98,7 @@ class CLIPSeg(nn.Module):
         activation2 = activations[::-1]
         # len(activation2) -- 3, len(self.blocks) -- 3, len(self.reduces) -- 3
 
-        a = torch.zeros_like(image)
+        a = torch.zeros_like(image) # just for torch.jit.script
         for i, (block, reduce) in enumerate(zip(self.blocks, self.reduces)):
             if i == 0:
                 a = reduce(activation2[i])
@@ -117,11 +113,9 @@ class CLIPSeg(nn.Module):
         a = a.view(bs, a.shape[1], size, size)
         a = self.trans_conv(a)
 
-        masks = torch.sigmoid(a)  # size() -- [4, 1, 352, 352]
+        masks =  F.interpolate(a, size=(H, W), mode="bilinear", align_corners=True)
 
-        masks =  F.interpolate(masks, size=(H, W), mode="bilinear", align_corners=True)
-
-        return masks
+        return torch.sigmoid(masks)  # size() -- [4, 1, 352, 352]
 
 
     def rescaled_pos_emb(self, new_size: Tuple[int, int]):
@@ -155,13 +149,16 @@ class CLIPSeg(nn.Module):
             dim=1,
         )
 
-        standard_n_tokens = 197  # ==> 197 ?
+        # standard_n_tokens = 50 if self.model.conv1.kernel_size[0] == 32 else 197
+        # standard_n_tokens = 197  # ==> 197 ?
         # x.shape -- torch.Size([2, 2305, 768])
-        if x.shape[1] != standard_n_tokens:
-            new_shape = int(math.sqrt(x.shape[1] - 1))
-            x = x + self.rescaled_pos_emb((new_shape, new_shape)).to(x.dtype)[None, :, :]
-        else:
-            x = x + self.backbone.visual.positional_embedding.to(x.dtype)
+        # if x.shape[1] != standard_n_tokens: # True
+        #     new_shape = int(math.sqrt(x.shape[1] - 1))
+        #     x = x + self.rescaled_pos_emb((new_shape, new_shape)).to(x.dtype)[None, :, :]
+        # else:
+        #     x = x + self.backbone.visual.positional_embedding.to(x.dtype)
+        new_shape = int(math.sqrt(x.shape[1] - 1))
+        x = x + self.rescaled_pos_emb((new_shape, new_shape)).to(x.dtype)[None, :, :]
 
         # ==> x.dtype = torch.float16
         x = self.backbone.visual.ln_pre(x.type(torch.float32))
