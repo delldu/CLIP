@@ -200,8 +200,7 @@ class CLIP(nn.Module):
 
     def encode_image(self, image):
         image = F.interpolate(image, size=(224, 224), mode="bilinear", align_corners=False)
-        for i in range(image.size(0)):
-            image[i] = self.image_normal(image[i])
+        image = self.image_normal(image)
 
         return self.visual(image.type(self.dtype)).to(torch.float32)
 
