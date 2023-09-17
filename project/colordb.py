@@ -21,7 +21,7 @@ def get_vector(model, device, image_filename):
     with torch.no_grad():
         feature = model.encode_image(image)
 
-    return feature
+    return feature/feature.norm()
 
 
 def create_database(model, device):
@@ -59,7 +59,7 @@ def search_image(model, device, filename):
     index.nprobe = 1
     qvector = get_vector(model, device, filename).cpu().numpy()
     D, I = index.search(qvector, 2)
-    # print(D, I)
+    print(D, I)
     qresult = [image_filenames[i] for i in I.reshape(-1).tolist()]
     print(qresult)
 
@@ -76,7 +76,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    model_version = "ViT-B-16"
+    model_version = "ViT-B-32"
     model, device = CLIP.get_model(model_version)
 
     if args.create:
